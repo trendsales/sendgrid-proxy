@@ -1,0 +1,28 @@
+{
+  "name": "sendgrid-proxy",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "devDependencies": {
+    "babel-cli": "^6.26.0",
+    "babel-core": "^6.26.0",
+    "babel-preset-env": "^1.6.1",
+    "babel-preset-stage-1": "^6.24.1",
+    "chai": "^4.1.2",
+    "mocha": "^4.0.1",
+    "mockery": "^2.1.0"
+  },
+  "scripts": {
+    "build": "mkdir -p build && babel -o build/index.js src && cp package.json build/",
+    "test": "mocha test/**/*.spec.js"
+  },
+  "babel": {
+    "presets": [
+      "env",
+      "stage-1"
+    ]
+  },
+  "dependencies": {
+    "azure-storage": "^2.6.0"
+  }
+}

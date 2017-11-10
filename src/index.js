@@ -5,6 +5,8 @@ const https = require('https');
 const tableSvc = azure.createTableService();
 const tableName = process.env.TABLENAME || 'sendgrid-proxy';
 
+const uniqueCategories = (process.env.UNIQUE_CATEGORIES || '').split(',').map(i => i.trim());
+
 const createTable = () => new Promise((resolve, reject) => {
   tableSvc.createTableIfNotExists(tableName, (error, result, response) => {
     if(error){
@@ -56,9 +58,7 @@ const send = (headers, body) => new Promise((resolve, reject) => {
   let responseHeaders = {};
   let statusCode;
 
-  resolve();
-
-  /*const req = https.request(options, (res) => {
+  const req = https.request(options, (res) => {
     responseHeaders = res.headers;
     statusCode = res.statusCode;
     res.setEncoding('utf8');
@@ -84,7 +84,7 @@ const send = (headers, body) => new Promise((resolve, reject) => {
   });
 
   req.write(body);
-  req.end();*/
+  req.end();
 });
 
 module.exports = async (context) => {
@@ -93,6 +93,7 @@ module.exports = async (context) => {
 
   const partitionKey = context.req.body.category;
   const rowKey = crypto.createHash('sha256').update(body).digest('base64');
+  const unique = uniqueCategories.includes(partitionKey);
 
   const current = {
     PartitionKey: {'_' : partitionKey},
@@ -101,17 +102,13 @@ module.exports = async (context) => {
     requestHeaders: {'_': JSON.stringify(headers)},
     responseBody: {'_': ''},
     responseHeaders: {'_': JSON.stringify({})},
+    unique: {'_': unique},
     statusCode: {'_': -1},
     send: {'_': false},
     count: {'_': 1},
   };
 
-  await createTable();
-  const previous = await get(partitionKey, rowKey);
-  if (previous) {
-    current.count._ = previous.count;
-    await update(current);
-  } else {
+  const handleSend = async () => {
     try {
       const response = await send(headers, body);
       current.responseBody._ = response.body;
@@ -126,6 +123,18 @@ module.exports = async (context) => {
         _: error.error,
       };
     }
+  };
+
+  await createTable();
+  const previous = await get(partitionKey, rowKey);
+  if (previous) {
+    current.count._ = previous.count + 1;
+    if (!unique) {
+      await handleSend();
+    }
+    await update(current);
+  } else {
+    await handleSend();
     await insert(current);
   }
 };

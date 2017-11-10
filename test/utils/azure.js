@@ -1,5 +1,10 @@
 let data = [];
 
+const cleanup = (obj) => obj ? Object.keys(obj).reduce((output, i) => {
+  output[i] = obj[i]._;
+  return output;
+}, {}) : undefined;
+
 class TableStorage {
   createTableIfNotExists(tableName, callback) {
     callback();
@@ -12,7 +17,7 @@ class TableStorage {
 
   replaceEntity(tableName, entry, callback) {
     data = data.map(d => {
-      if (d.partitionKey._ === entry.partitionKey._ && d.rowKey._ === entry.rowKey._) {
+      if (d.PartitionKey._ === entry.PartitionKey._ && d.RowKey._ === entry.RowKey._) {
         return entry;
       } else {
         return d;
@@ -22,7 +27,7 @@ class TableStorage {
   }
 
   retrieveEntity(tablename, partitionKey, rowKey, callback) {
-    callback(data.find(d => d.partitionKey._ === entry.partitionKey._ && d.rowKey._ === entry.rowKey._));
+    callback(undefined, cleanup(data.find(d => d.PartitionKey._ === partitionKey && d.RowKey._ === rowKey)));
   }
 }
 

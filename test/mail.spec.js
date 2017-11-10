@@ -27,7 +27,13 @@ const reqs = [{
   },
   rawBody: 'test3',
   headers,
-}]
+}];
+
+const createContext = (req) => ({
+  req,
+  done: () => {},
+  log: () => {},
+});
 
 const cleanup = (obj) => obj ? Object.keys(obj).reduce((output, i) => {
   output[i] = obj[i]._;
@@ -53,7 +59,7 @@ describe('proxy', () => {
   });
 
   it('should be able to send a new mail', async() => {
-    await proxy({ req: reqs[0]});
+    await proxy(createContext(reqs[0]));
     const azureData = azure.getData().map(cleanup);
     const httpsData = https.getData();
     expect(azureData).to.be.eql([{
@@ -72,7 +78,7 @@ describe('proxy', () => {
   });
 
   it('should be able to send multible mails', async() => {
-    await proxy({ req: reqs[1]});
+    await proxy(createContext(reqs[1]));
     const azureData = azure.getData().map(cleanup);
     const httpsData = https.getData();
     expect(azureData).to.have.length(2);
@@ -82,7 +88,7 @@ describe('proxy', () => {
   });
 
   it('should not resend mails marked as unique', async () => {
-    await proxy({ req: reqs[1]});
+    await proxy(createContext(reqs[1]));
     const azureData = azure.getData().map(cleanup);
     const httpsData = https.getData();
     expect(azureData).to.have.length(2);
@@ -92,8 +98,8 @@ describe('proxy', () => {
   });
 
   it('should resend mails not marked as unique', async () => {
-    await proxy({ req: reqs[2]});
-    await proxy({ req: reqs[2]});
+    await proxy(createContext(reqs[2]));
+    await proxy(createContext(reqs[2]));
     const azureData = azure.getData().map(cleanup);
     const httpsData = https.getData();
     expect(azureData).to.have.length(3);

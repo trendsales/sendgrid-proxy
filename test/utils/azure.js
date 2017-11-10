@@ -1,13 +1,18 @@
 let data = [];
 
-const cleanup = (obj) => obj ? Object.keys(obj).reduce((output, i) => {
-  output[i] = obj[i]._;
-  return output;
-}, {}) : undefined;
-
 class TableStorage {
   createTableIfNotExists(tableName, callback) {
     callback();
+  }
+
+  insertOrReplaceEntity(tableName, entity, callback) {
+    this.retrieveEntity(tableName, entity.PartitionKey._, entity.RowKey._, (err, prev) => {
+      if (prev) {
+        this.replaceEntity(tableName, entity, callback);
+      } else {
+        this.insertEntity(tableName, entity, callback);
+      }
+    })
   }
 
   insertEntity(tableName, entry, callback) {
@@ -27,7 +32,7 @@ class TableStorage {
   }
 
   retrieveEntity(tablename, partitionKey, rowKey, callback) {
-    callback(undefined, cleanup(data.find(d => d.PartitionKey._ === partitionKey && d.RowKey._ === rowKey)));
+    callback(undefined, data.find(d => d.PartitionKey._ === partitionKey && d.RowKey._ === rowKey));
   }
 }
 

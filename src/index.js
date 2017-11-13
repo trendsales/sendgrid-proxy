@@ -6,6 +6,19 @@ const connectionString = process.env.CONNECTION_STRING;
 const tableSvc = azure.createTableService(connectionString);
 const tableName = process.env.TABLENAME || 'sendgridproxy';
 
+// Header fields from the sendgrid to be forwarded to the caller
+const proxyHeaders = [
+  'content-type',
+  'X-Message-Id',
+  'Content-Length',
+  'Date',
+];
+
+// Used for mapping additional input values from body to the resulting row
+const values = {
+  categories: body => (body.categories || []).join(', '),
+}
+
 const uniqueCategories = (process.env.UNIQUE_CATEGORIES || '').split(',').map(i => i.trim());
 
 const cleanup = (obj) => obj ? Object.keys(obj).reduce((output, i) => {
@@ -44,16 +57,21 @@ const get = (partitionKey, rowKey) => new Promise((resolve, reject) => {
   });
 });
 
-const send = (headers, body) => new Promise((resolve, reject) => {
+const send = (method, headers, body) => new Promise((resolve, reject) => {
   var options = {
-    ...headers,
-    host: '',
-    path: '',
+    headers: {
+      ...headers,
+      host: 'api.sendgrid.com',
+      path: '/v3/mail/send',
+    },
+    method,
+    host: 'api.sendgrid.com',
+    path: '/v3/mail/send',
   };
 
   let responseBody = '';
   let responseHeaders = {};
-  let statusCode;
+  let statusCode = -1;
 
   const req = https.request(options, (res) => {
     responseHeaders = res.headers;
@@ -87,31 +105,40 @@ const send = (headers, body) => new Promise((resolve, reject) => {
 const handleRequest = async (context) => {
   const body = context.req.rawBody;
   const headers = context.req.headers;
+  const categories = context.req.body.categories || ['unset'];
 
-  const partitionKey = context.req.body.category || 'unset';
+  const partitionKey = categories.join('');
   const rowKey = crypto.createHash('sha256').update(body).digest('hex');
-  const unique = uniqueCategories.includes(partitionKey);
+  const unique = !!categories.find(c => uniqueCategories.includes(c));
 
   const current = {
     PartitionKey: {'_' : partitionKey},
     RowKey: {'_': rowKey},
     requestID: {'_': rowKey},
-    requestBody: {'_': body, '$': 'Edm.String'},
-    requestHeaders: {'_': JSON.stringify(headers), '$': 'Edm.String'},
-    responseBody: {'_': '', '$': 'Edm.String'},
-    responseHeaders: {'_': JSON.stringify({}), '$': 'Edm.String'},
-    unique: {'_': unique, '$': 'Edm.Boolean'},
-    statusCode: {'_': -1, '$': 'Edm.Int32'},
-    send: {'_': false, '$': 'Edm.Boolean'},
-    count: {'_': 1, '$': 'Edm.Int32'},
+    requestBody: {'_': body},
+    requestHeaders: {'_': JSON.stringify(headers)},
+    responseBody: {'_': ''},
+    responseHeaders: {'_': JSON.stringify({})},
+    messageId: {'_': ''},
+    unique: {'_': unique},
+    statusCode: {'_': -1},
+    send: {'_': false},
+    count: {'_': 1},
   };
+
+  const addKeys = Object.keys(values).forEach(key => {
+    current[key] = {
+      _: values[key](context.req.body),
+    };
+  });
 
   const handleSend = async () => {
     try {
-      const response = await send(headers, body);
+      const response = await send(context.req.method, headers, body);
       current.responseBody._ = response.body;
       current.statusCode._ = response.statusCode;
       current.responseHeaders._ = JSON.stringify(response.headers);
+      current.messageId._ = response.headers['X-Message-Id'] || '';
       current.send._ = true;
     } catch (error) {
       current.responseBody._ = error.body;
@@ -129,12 +156,21 @@ const handleRequest = async (context) => {
   if (previous) {
     current.count._ = previous.count._ + 1;
     if (!unique) {
-      //await handleSend();
+      await handleSend();
     }
   } else {
-    //await handleSend();
+    await handleSend();
   }
-  context.log(current);
+  const responseHeaders = JSON.parse(current.responseHeaders._);
+  const newHeaders = proxyHeaders.reduce((output, i) => {
+    output[i] = responseHeaders[i];
+    return output;
+  }, {});
+  context.res = {
+    status: current.statusCode._ > 0 ? current.statusCode._ : 200,
+    headers: newHeaders,
+    body: current.responseBody._,
+  };
   await update(current);
 };
 
@@ -142,6 +178,7 @@ module.exports = async (context) => {
   try {
     await handleRequest(context);
   } catch (err) {
+    context.res.status = 500;
     context.log(err);
   }
 }

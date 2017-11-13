@@ -11,19 +11,19 @@ const headers = {
 
 const reqs = [{
   body: {
-    category: 'newsletter',
+    categories: ['newsletter'],
   },
   rawBody: 'test1',
   headers,
 }, {
   body: {
-    category: 'newsletter',
+    categories: ['newsletter'],
   },
   rawBody: 'test2',
   headers,
 }, {
   body: {
-    category: 'not-newsletter',
+    categories: ['not-newsletter'],
   },
   rawBody: 'test3',
   headers,
@@ -64,11 +64,14 @@ describe('proxy', () => {
     const httpsData = https.getData();
     expect(azureData).to.be.eql([{
       PartitionKey: 'newsletter',
-      RowKey: 'G08OmFGXGZjnMgeFRMlrNsPQHO33yqMyNZ1vHYNWcBQ=',
+      RowKey: '1b4f0e9851971998e732078544c96b36c3d01cedf7caa332359d6f1d83567014',
+      requestID: '1b4f0e9851971998e732078544c96b36c3d01cedf7caa332359d6f1d83567014',
+      categories: 'newsletter',
       requestBody: 'test1',
+      messageId: 'msg-id',
       requestHeaders: '{}',
       responseBody: 'test data',
-      responseHeaders: '{}',
+      responseHeaders: '{\"X-Message-Id\":\"msg-id\"}',
       statusCode: 204,
       send: true,
       unique: true,

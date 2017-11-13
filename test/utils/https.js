@@ -4,7 +4,9 @@ exports.getData = () => entries;
 
 class Response {
   constructor() {
-    this.headers = {};
+    this.headers = {
+      'X-Message-Id': 'msg-id',
+    };
     this.statusCode = 204;
     this.listeners = [];
   }
